@@ -1,49 +1,31 @@
-import time
-import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
+import requests
+from bs4 import BeautifulSoup
 
-# 웹 드라이버 설정
-chrome_options = Options()
-chrome_options.add_argument('--headless')  # 창을 띄우지 않고 백그라운드에서 실행
-chrome_options.add_argument('--disable-gpu')
-
-# Chrome WebDriver 설정
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-
-# 멜론 순위 페이지로 이동
+# 멜론 100위 페이지 URL
 url = "https://www.melon.com/chart/index.htm"
-driver.get(url)
 
-# 페이지가 완전히 로드될 때까지 잠시 대기
-time.sleep(5)
+# 헤더 설정 (서버가 봇을 차단하지 않도록 user-agent를 설정)
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+}
 
-# 100위까지의 곡 정보 가져오기
-songs = []
-for i in range(1, 101):  # 1위부터 100위까지
-    try:
-        rank = driver.find_element(By.XPATH, f'//*[@id="frm"]/div/table/tbody/tr[{i}]/td[2]/div/span').text  # 순위
-        title = driver.find_element(By.XPATH, f'//*[@id="frm"]/div/table/tbody/tr[{i}]/td[3]/div/div/div/a').text  # 곡 제목
-        artist = driver.find_element(By.XPATH, f'//*[@id="frm"]/div/table/tbody/tr[{i}]/td[4]/div/div/span/a').text  # 아티스트 이름
-        
-        songs.append({
-            "순위": rank,
-            "곡 제목": title,
-            "아티스트": artist
-        })
-    except Exception as e:
-        print(f"Error at rank {i}: {e}")
+# 요청 보내기
+response = requests.get(url, headers=headers)
 
-# 웹 드라이버 종료
-driver.quit()
-
-# DataFrame으로 저장
-df = pd.DataFrame(songs)
-
-# CSV 파일로 저장
-df.to_csv('melon_top_100.csv', index=False, encoding='utf-8-sig')
-
-# 출력
+# 응답이 성공적이면
+if response.status_code == 200:
+    # BeautifulSoup으로 HTML 파싱
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    # 순위 데이터 추출
+    chart_items = soup.find_all('tr', {'class': 'lst50'})  # lst50은 멜론 차트 항목 클래스
+    
+    # 100위까지 순위 출력
+    for rank, item in enumerate(chart_items, start=1):
+        if rank > 100:
+            break
+        song_title = item.find('div', {'class': 'ellipsis'}).text.strip()
+        artist_name = item.find('span', {'class': 'checkEllipsis'}).text.strip()
+        print(f"{rank}위: {song_title} - {artist_name}")
+else:
+    print(f"요청 실패: {response.status_code}")
